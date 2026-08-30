@@ -1,0 +1,66 @@
+services:
+  maccms:
+    build: ./maccms
+    container_name: maccms
+    restart: unless-stopped
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=maccms10
+      - DB_USER=root
+      - DB_PASS=
+      - ADMIN_USER=admin
+      - ADMIN_PASS=admin123
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      mysql:
+        condition: service_started
+    networks:
+      - emu-net
+
+  mysql:
+    image: docker.m.daocloud.io/library/mysql:5.7
+    container_name: maccms-mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+      - MYSQL_DATABASE=maccms10
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --sql-mode=NO_ENGINE_SUBSTITUTION
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - emu-net
+
+  emulator:
+    build: ./emulator
+    container_name: android-tv-emulator
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kvm:/dev/kvm
+    ports:
+      - "5554:5554"
+      - "5555:5555"
+    networks:
+      - emu-net
+
+  build:
+    build: ./build
+    container_name: android-build
+    restart: unless-stopped
+    command: ["-c", "tail -f /dev/null"]
+    volumes:
+      - ../app-android:/app-android/workspace
+    networks:
+      - emu-net
+
+networks:
+  emu-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
