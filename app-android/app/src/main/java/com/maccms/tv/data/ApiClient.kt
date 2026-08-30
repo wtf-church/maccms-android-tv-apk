@@ -24,6 +24,15 @@ interface MaccmsApi {
         @Query("wd") wd: String? = null
     ): String
 
+    /** 轻量列表：ac=list（不含 vod_pic 等字段，字段更少、更快） */
+    @GET("api.php/provide/vod")
+    suspend fun getVodListLight(
+        @Query("ac") ac: String = "list",
+        @Query("pg") pg: Int = 1,
+        @Query("t") t: String? = null,
+        @Query("wd") wd: String? = null
+    ): String
+
     /** 详情：ac=detail&ids=vod_id */
     @GET("api.php/provide/vod")
     suspend fun getVodDetail(
@@ -37,6 +46,7 @@ class ApiClient(private val context: Context) {
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
+        coerceInputValues = true
     }
 
     private val okHttp = OkHttpClient.Builder()

@@ -45,8 +45,15 @@ fun HomeScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    // 分类名称映射：线上 API type_name 为 null，用内置名称（已移除空分类；只保留有采集数据的分类）
     val typeNames = listOf(
-        1 to "电影", 2 to "电视剧", 3 to "综艺", 4 to "动漫", 5 to "短剧", 6 to "纪录片"
+        5 to "短剧", 6 to "纪录片",
+        20 to "国产剧", 21 to "韩剧", 22 to "日漫", 23 to "美剧",
+        24 to "华语电影", 25 to "欧美电影", 26 to "动作片", 27 to "爱情片", 28 to "科幻片",
+        29 to "恐怖片", 30 to "剧情片", 31 to "伦理片", 32 to "香港剧", 33 to "台湾剧",
+        34 to "日剧", 35 to "海外剧", 36 to "泰剧", 37 to "国漫", 38 to "欧美动漫",
+        39 to "动画片", 40 to "大陆综艺", 41 to "港台综艺", 42 to "日韩综艺",
+        43 to "欧美综艺", 44 to "电影解说", 45 to "预告片"
     )
     val scope = rememberCoroutineScope()
 
@@ -56,8 +63,15 @@ fun HomeScreen(
             error = null
             repository.getHomeList().onSuccess { list ->
                 allVods = list
+                // 每个分类行独立拉取第一页（避免全量 15 万条）；只保留有数据的分类
                 typeNames.forEach { (id, _) ->
-                    typeRows = typeRows + (id to list.filter { it.type_id == id }.take(12))
+                    scope.launch {
+                        repository.getListByType(id).onSuccess { typeList ->
+                            if (typeList.isNotEmpty()) {
+                                typeRows = typeRows + (id to typeList.take(12))
+                            }
+                        }
+                    }
                 }
                 loading = false
             }.onFailure {
@@ -84,15 +98,17 @@ fun HomeScreen(
                                 onInfoClick = { onVodClick(allVods.first()) }
                             )
                         }
-                        typeNames.forEach { (id, name) ->
-                            item {
-                                PosterRow(
-                                    title = name,
-                                    vods = typeRows[id] ?: emptyList(),
-                                    onVodClick = onVodClick
-                                )
+                        // 只渲染有数据的分类行（避免空分类占位）
+                        typeNames.filter { !(typeRows[it.first] ?: emptyList()).isEmpty() }
+                            .forEach { (id, name) ->
+                                item {
+                                    PosterRow(
+                                        title = name,
+                                        vods = typeRows[id] ?: emptyList(),
+                                        onVodClick = onVodClick
+                                    )
+                                }
                             }
-                        }
                         item { Spacer(Modifier.height(24.dp)) }
                     }
                 }

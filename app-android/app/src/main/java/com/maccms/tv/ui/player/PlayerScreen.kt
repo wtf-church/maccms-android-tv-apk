@@ -41,18 +41,15 @@ fun PlayerScreen(
     var title by remember { mutableStateOf(vod.vod_name + if (episode != null) " · ${episode.name}" else "") }
     val scope = rememberCoroutineScope()
 
-    // 解析播放地址：优先用传入分集；否则用缓存 vod 的 play_url；仍为空则异步拉详情
+    // 解析播放地址：优先 m3u8 源；传入分集优先
     LaunchedEffect(vod.vod_id, episode) {
-        // 磁盘/DOM 缓存可能有完整 vod，这里先从缓存取，再尝试详情
         val cachedUrl = episode?.url?.takeIf { it.isNotBlank() }
-            ?: VodParser.parsePlaySources(vod.vod_play_from, vod.vod_play_url)
-                .firstOrNull()?.firstEpisode?.url
+            ?: VodParser.pickBestUrl(vod.vod_play_from, vod.vod_play_url)
         if (cachedUrl != null) {
             playUrl = cachedUrl
         } else {
             repository.getDetail(vod.vod_id).onSuccess { detail ->
-                val url = VodParser.parsePlaySources(detail.vod_play_from, detail.vod_play_url)
-                    .firstOrNull()?.firstEpisode?.url
+                val url = VodParser.pickBestUrl(detail.vod_play_from, detail.vod_play_url)
                 if (url != null) {
                     playUrl = url
                     if (episode == null) title = detail.vod_name

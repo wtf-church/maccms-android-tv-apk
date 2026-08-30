@@ -19,7 +19,7 @@ data class ApiResponse(
 data class Vod(
     val vod_id: Int = 0,
     val type_id: Int = 0,
-    val type_name: String = "",
+    val type_name: String? = null,
     val vod_name: String = "",
     val vod_en: String = "",
     val vod_remarks: String = "",
@@ -30,6 +30,7 @@ data class Vod(
     val vod_year: String = "",
     val vod_score: String = "",
     val vod_pic: String = "",
+    val vod_pic_slide: String = "",
     val vod_content: String = "",
     val vod_time: String = "",
     val vod_play_from: String = "",
@@ -45,6 +46,22 @@ data class PlaySource(val from: String, val episodes: List<Episode>) {
 }
 
 object VodParser {
+
+    /**
+     * 从多源中挑最稳的播放地址：优先 m3u8（HLS 防盗链少），其次 MP4。
+     * 找不到则回退第一个可用源。
+     */
+    fun pickBestUrl(playFrom: String, playUrl: String): String? {
+        val sources = parsePlaySources(playFrom, playUrl)
+        if (sources.isEmpty()) return null
+        // 遍历所有源的所有分集，优先 m3u8
+        for (source in sources) {
+            for (ep in source.episodes) {
+                if (ep.url.contains(".m3u8")) return ep.url
+            }
+        }
+        return sources.first().firstEpisode?.url
+    }
 
     /**
      * 解析 vod_play_url。
@@ -70,10 +87,14 @@ object VodParser {
     private fun parseEpisode(seg: String): Episode? {
         val s = seg.trim()
         if (s.isEmpty()) return null
-        // 形如 "正片@http://.../demo_1.mp4"
+        // maccms 标准格式 "集名$URL"；老 demo 数据用 "正片@http://..."
+        val dollar = s.lastIndexOf('$')
         val at = s.lastIndexOf('@')
-        if (at > 0 && at < s.length - 1) {
-            return Episode(s.substring(0, at).trim(), s.substring(at + 1).trim())
+        val sep = if (dollar > 0 && dollar < s.length - 1) dollar
+        else if (at > 0 && at < s.length - 1) at
+        else -1
+        if (sep > 0) {
+            return Episode(s.substring(0, sep).trim(), s.substring(sep + 1).trim())
         }
         // 无集名，整段视为 URL
         return if (s.startsWith("http")) Episode(s, s) else null

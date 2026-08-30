@@ -61,7 +61,7 @@ fun SettingsScreen(onDone: () -> Unit) {
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            "默认 ${BaseUrlManager.DEFAULT_BASE_URL}（模拟器内指向 maccms）。\n真机安装时，请改为电脑的局域网地址，如 http://192.168.1.100:8080，并确保电视与电脑同一网络。",
+            "默认 ${BaseUrlManager.DEFAULT_BASE_URL}。\n修改后立即生效；如遇网络问题，请确认电视可访问该域名。",
             color = TextGray,
             fontSize = 13.sp
         )

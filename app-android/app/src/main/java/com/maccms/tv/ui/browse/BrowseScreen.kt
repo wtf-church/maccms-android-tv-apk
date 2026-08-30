@@ -36,14 +36,32 @@ fun BrowseScreen(
     repository: VodRepository,
     onVodClick: (Vod) -> Unit
 ) {
-    val typeNames = listOf(
-        1 to "电影", 2 to "电视剧", 3 to "综艺", 4 to "动漫", 5 to "短剧", 6 to "纪录片"
+    val allTypeNames = listOf(
+        5 to "短剧", 6 to "纪录片",
+        20 to "国产剧", 21 to "韩剧", 22 to "日漫", 23 to "美剧",
+        24 to "华语电影", 25 to "欧美电影", 26 to "动作片", 27 to "爱情片", 28 to "科幻片",
+        29 to "恐怖片", 30 to "剧情片", 31 to "伦理片", 32 to "香港剧", 33 to "台湾剧",
+        34 to "日剧", 35 to "海外剧", 36 to "泰剧", 37 to "国漫", 38 to "欧美动漫",
+        39 to "动画片", 40 to "大陆综艺", 41 to "港台综艺", 42 to "日韩综艺",
+        43 to "欧美综艺", 44 to "电影解说", 45 to "预告片"
     )
-    var selectedType by remember { mutableStateOf(1) }
+    var typeNames by remember { mutableStateOf(allTypeNames) }
+    var selectedType by remember { mutableStateOf(5) }
     var vods by remember { mutableStateOf<List<Vod>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+
+    // 首次加载：探测各分类是否有数据，只保留有数据的分类
+    LaunchedEffect(Unit) {
+        val existing = mutableListOf<Pair<Int, String>>()
+        allTypeNames.forEach { (id, name) ->
+            repository.getListByType(id).onSuccess { typeList ->
+                if (typeList.isNotEmpty()) existing += (id to name)
+            }
+        }
+        typeNames = if (existing.isEmpty()) allTypeNames else existing
+    }
 
     fun load(id: Int) {
         scope.launch {

@@ -50,7 +50,7 @@ fun HeroBanner(
             .scale(scale)
     ) {
         AsyncImage(
-            model = vod.vod_pic,
+            model = vod.vod_pic_slide.ifBlank { vod.vod_pic },
             contentDescription = vod.vod_name,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
