@@ -14,14 +14,16 @@ RUN sed -i \
     && for i in 1 2 3 4 5 6 7 8 9 10; do \
          apt-get install -y --no-install-recommends -o Acquire::Check-Valid-Until=false \
            -o Acquire::Retries=20 -o Acquire::http::Timeout=90 \
-           nginx curl libzip-dev unzip \
+           nginx curl libzip-dev unzip libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
          && break \
          || { echo "apt install failed (try $i), retrying..."; sleep 5; apt-get update; }; \
        done \
-    && apt-get install -y --fix-missing --no-install-recommends -o Acquire::Check-Valid-Until=false nginx curl libzip-dev unzip \
+    && apt-get install -y --fix-missing --no-install-recommends -o Acquire::Check-Valid-Until=false nginx curl libzip-dev unzip libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
     && docker-php-source extract \
     && docker-php-ext-install pdo_mysql mysqli pcntl sysvsem \
-    && docker-php-ext-enable pdo_mysql mysqli pcntl sysvsem \
+    && docker-php-ext-configure gd --with-freetype-dir=/usr --with-jpeg-dir=/usr --with-png-dir=/usr \
+    && docker-php-ext-install gd \
+    && docker-php-ext-enable pdo_mysql mysqli pcntl sysvsem gd \
     && docker-php-source delete \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /var/www/maccms /var/log/nginx
