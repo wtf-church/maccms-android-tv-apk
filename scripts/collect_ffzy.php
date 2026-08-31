@@ -12,6 +12,13 @@
 
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
 
+// ---- 单实例锁 ---- 防止 cron 与手动重跑叠加
+$LOCK = fopen(__DIR__ . '/collect.lock', 'c');
+if (!$LOCK || !flock($LOCK, LOCK_EX | LOCK_NB)) {
+    fwrite(STDERR, "another collect instance is running, exit\n");
+    exit(2);
+}
+
 // ---- 配置 ----
 $DB = [
     'host'    => 'localhost',
