@@ -129,6 +129,18 @@ function fmt_play_url($v) {
     return '';
 }
 
+// mac_vod 表是 utf8。连接虽用 utf8mb4，但 4 字节字符(emoji/生僻字)写入时会报
+// Incorrect string value，这里统一剔除，避免整条插入失败
+function strip_4byte($s) {
+    $s = (string)$s;
+    if (!mb_check_encoding($s, 'UTF-8')) $s = mb_convert_encoding($s, 'UTF-8', 'UTF-8');
+    return preg_replace('/[\x{10000}-\x{10FFFF}]/u', '', $s);
+}
+
+function clean_val($s) {
+    return strip_4byte(is_null($s) ? '' : $s);
+}
+
 // ---- 主循环 ----
 // 源站分类列表
 $srcTypes = [];
@@ -181,12 +193,12 @@ foreach ($srcTypes as $srcT) {
                 $stmt->close();
                 $exists = $row ? (int)$row['vod_id'] : 0;
 
-                $playFrom = fmt_play_from($item);
-                $playNote = isset($item['vod_play_note']) ? $item['vod_play_note'] : '';
-                $playServer = isset($item['vod_play_server']) ? $item['vod_play_server'] : '';
-                $content   = isset($item['vod_content']) ? (string)$item['vod_content'] : '';
+                $playFrom = clean_val(fmt_play_from($item));
+                $playNote = clean_val(isset($item['vod_play_note']) ? $item['vod_play_note'] : '');
+                $playServer = clean_val(isset($item['vod_play_server']) ? $item['vod_play_server'] : '');
+                $content   = clean_val(isset($item['vod_content']) ? (string)$item['vod_content'] : '');
                 $blurb     = mb_substr(trim(strip_tags($content)), 0, 100, 'UTF-8');
-                $en        = isset($item['vod_en']) ? trim($item['vod_en']) : '';
+                $en        = clean_val(isset($item['vod_en']) ? trim($item['vod_en']) : '');
                 $letter    = $en !== '' ? strtoupper(substr($en, 0, 1)) : 'Z';
                 $yearVal   = (int)(isset($item['vod_year']) ? $item['vod_year'] : 0);
                 if ($yearVal === 0) $yearVal = $year;
@@ -197,21 +209,21 @@ foreach ($srcTypes as $srcT) {
                 $cols = [
                     'type_id' => $local, 'type_id_1' => $localPid,
                     'vod_name' => $name,
-                    'vod_sub' => isset($item['vod_sub']) ? $item['vod_sub'] : '',
+                    'vod_sub' => clean_val(isset($item['vod_sub']) ? $item['vod_sub'] : ''),
                     'vod_en' => $en,
                     'vod_status' => 1,
                     'vod_letter' => $letter,
-                    'vod_class' => isset($item['vod_class']) ? trim($item['vod_class'] . ',' . (isset($item['type_name']) ? $item['type_name'] : ''), ', ') : (isset($item['type_name']) ? $item['type_name'] : ''),
-                    'vod_pic' => isset($item['vod_pic']) ? $item['vod_pic'] : '',
-                    'vod_actor' => isset($item['vod_actor']) ? $item['vod_actor'] : '',
-                    'vod_director' => isset($item['vod_director']) ? $item['vod_director'] : '',
-                    'vod_remarks' => isset($item['vod_remarks']) ? $item['vod_remarks'] : '',
-                    'vod_area' => isset($item['vod_area']) ? $item['vod_area'] : '',
-                    'vod_lang' => isset($item['vod_lang']) ? $item['vod_lang'] : '',
+                    'vod_class' => clean_val(isset($item['vod_class']) ? trim(clean_val($item['vod_class']) . ',' . (isset($item['type_name']) ? $item['type_name'] : ''), ', ') : (isset($item['type_name']) ? $item['type_name'] : '')),
+                    'vod_pic' => clean_val(isset($item['vod_pic']) ? $item['vod_pic'] : ''),
+                    'vod_actor' => clean_val(isset($item['vod_actor']) ? $item['vod_actor'] : ''),
+                    'vod_director' => clean_val(isset($item['vod_director']) ? $item['vod_director'] : ''),
+                    'vod_remarks' => clean_val(isset($item['vod_remarks']) ? $item['vod_remarks'] : ''),
+                    'vod_area' => clean_val(isset($item['vod_area']) ? $item['vod_area'] : ''),
+                    'vod_lang' => clean_val(isset($item['vod_lang']) ? $item['vod_lang'] : ''),
                     'vod_year' => $yearVal,
-                    'vod_serial' => isset($item['vod_serial']) ? (string)$item['vod_serial'] : '',
-                    'vod_state' => isset($item['vod_state']) ? $item['vod_state'] : '',
-                    'vod_duration' => isset($item['vod_duration']) ? $item['vod_duration'] : '',
+                    'vod_serial' => clean_val(isset($item['vod_serial']) ? (string)$item['vod_serial'] : ''),
+                    'vod_state' => clean_val(isset($item['vod_state']) ? $item['vod_state'] : ''),
+                    'vod_duration' => clean_val(isset($item['vod_duration']) ? $item['vod_duration'] : ''),
                     'vod_isend' => 0,
                     'vod_level' => 0,
                     'vod_lock' => 0,
@@ -223,6 +235,9 @@ foreach ($srcTypes as $srcT) {
                     'vod_content' => $content,
                     'vod_play_from' => $playFrom, 'vod_play_server' => $playServer, 'vod_play_note' => $playNote,
                     'vod_play_url' => $playUrl,
+                    'vod_plot_name' => '',
+                    'vod_plot_detail' => '',
+                    'vod_down_url' => '',
                 ];
 
                 if ($exists) {
@@ -231,20 +246,22 @@ foreach ($srcTypes as $srcT) {
                     $params[] = $exists; $types .= 'i';
                     $sql = "UPDATE mac_vod SET " . implode(', ', $set) . " WHERE vod_id = ?";
                     $stmt = $mysqli->prepare($sql);
+                    if (!$stmt) { fwrite(STDERR, "prepare err {$mysqli->error}: $name\n"); $skip++; continue; }
                     $stmt->bind_param($types, ...$params);
                     $stmt->execute();
+                    if ($stmt->errno) { fwrite(STDERR, "update err {$stmt->error}: $name\n"); }
                     $stmt->close();
-                    if ($mysqli->errno) { fwrite(STDERR, "update err {$mysqli->error}: $name\n"); $skip++; continue; }
                     $upd++;
                 } else {
                     $colNames = array_keys($cols);
                     $sql = "INSERT INTO mac_vod (" . implode(',', $colNames) . ") VALUES (" . implode(',', array_fill(0, count($cols), '?')) . ")";
                     $stmt = $mysqli->prepare($sql);
+                    if (!$stmt) { fwrite(STDERR, "prepare err {$mysqli->error}: $name\n"); $skip++; continue; }
                     $types = str_repeat('s', count($cols));
                     $stmt->bind_param($types, ...array_values($cols));
                     $stmt->execute();
+                    if ($stmt->errno) { fwrite(STDERR, "insert err {$stmt->error}: $name\n"); }
                     $stmt->close();
-                    if ($mysqli->errno) { fwrite(STDERR, "insert err {$mysqli->error}: $name\n"); $skip++; continue; }
                     $new++;
                 }
             }
