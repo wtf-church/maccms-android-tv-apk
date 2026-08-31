@@ -8,15 +8,29 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,9 +42,12 @@ import com.maccms.tv.ui.components.PosterCard
 import com.maccms.tv.ui.theme.NetflixBlack
 import com.maccms.tv.ui.theme.NetflixRed
 import com.maccms.tv.ui.theme.TextWhite
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** 浏览页：左侧分类列表 + 右侧该类影片网格 */
+private const val GRID_COLUMNS = 5
+
+/** 浏览页：左侧分类列表 + 右侧该类影片网格（遥控器方向键跨区域导航） */
 @Composable
 fun BrowseScreen(
     repository: VodRepository,
@@ -50,7 +67,11 @@ fun BrowseScreen(
     var vods by remember { mutableStateOf<List<Vod>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var maxPage by remember { mutableIntStateOf(1) }
+    var nextPage by remember { mutableIntStateOf(1) }
+    var loadingMore by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val gridState = rememberLazyGridState()
 
     // 首次加载：探测各分类是否有数据，只保留有数据的分类
     LaunchedEffect(Unit) {
@@ -67,8 +88,14 @@ fun BrowseScreen(
         scope.launch {
             loading = true
             error = null
-            repository.getListByType(id).onSuccess {
-                vods = it
+            loadingMore = false
+            maxPage = 1
+            nextPage = 1
+            repository.getListByTypePage(id, 1).onSuccess { resp ->
+                if (selectedType == id) {
+                    vods = resp.list
+                    maxPage = resp.pagecount.coerceAtLeast(1)
+                }
                 loading = false
             }.onFailure {
                 error = it.message
@@ -77,33 +104,123 @@ fun BrowseScreen(
         }
     }
 
+    // 触底加载下一页：读最后一项时预取下一页（pagecount 上限内）
+    LaunchedEffect(gridState, nextPage, maxPage, selectedType, vods.size) {
+        if (!loading && !loadingMore && nextPage < maxPage && vods.isNotEmpty()) {
+            val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()
+            val target = (vods.size - 1).coerceAtLeast(0)
+            if (last != null && last.index >= target - GRID_COLUMNS) {
+                loadingMore = true
+                val page = nextPage
+                val type = selectedType
+                repository.getListByTypePage(type, page).onSuccess { resp ->
+                    if (selectedType == type) {
+                        vods = (vods + resp.list).distinctBy { it.vod_id }
+                        maxPage = resp.pagecount.coerceAtLeast(maxPage)
+                        nextPage = page + 1
+                    }
+                }
+                loadingMore = false
+            }
+        }
+    }
+
     LaunchedEffect(selectedType) { load(selectedType) }
+
+    // —— 遥控器焦点管理 ——
+    val typeListState = rememberLazyListState()
+    val focusedTypeId = remember { mutableIntStateOf(selectedType) }
+    val typeRequesters = remember { mutableStateMapOf<Int, FocusRequester>() }
+
+    // 进入浏览页时先聚焦当前分类，保证遥控器立即可用
+    LaunchedEffect(Unit) {
+        delay(120)
+        runCatching { typeRequesters[focusedTypeId.intValue]?.requestFocus() }
+    }
+
+    // 网格边界键（最左列 LEFT / 首行 UP）跳回分类列表
+    fun focusCategory() {
+        scope.launch {
+            typeListState.animateScrollToItem(
+                typeNames.indexOfFirst { it.first == focusedTypeId.intValue }.coerceAtLeast(0)
+            )
+            delay(60)
+            runCatching { typeRequesters[focusedTypeId.intValue]?.requestFocus() }
+        }
+    }
 
     Row(Modifier.fillMaxSize().background(NetflixBlack)) {
         LazyColumn(
+            state = typeListState,
             modifier = Modifier.width(220.dp).fillMaxHeight(),
             contentPadding = PaddingValues(vertical = 20.dp)
         ) {
             items(typeNames, key = { it.first }) { (id, name) ->
-                TypeItem(name = name, selected = id == selectedType, onClick = { selectedType = id })
+                TypeItem(
+                    name = name,
+                    selected = id == selectedType,
+                    onClick = { selectedType = id },
+                    focusRequester = remember(id) { FocusRequester().also { typeRequesters[id] = it } },
+                    onFocused = { focusedTypeId.intValue = id }
+                )
             }
         }
-        Box(Modifier.weight(1f).fillMaxHeight().padding(end = 40.dp)) {
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .padding(end = 40.dp)
+        ) {
             when {
                 loading -> LoadingBox()
                 error != null -> ErrorBox(error ?: "", onRetry = { load(selectedType) })
-                else -> LazyColumn(contentPadding = PaddingValues(top = 32.dp, bottom = 40.dp)) {
-                    items(vods.chunked(5)) { row ->
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier.padding(bottom = 20.dp)
-                        ) {
-                            row.forEach { vod ->
-                                PosterCard(
-                                    vod = vod,
-                                    width = 176.dp,
-                                    height = 250.dp,
-                                    onClick = { onVodClick(vod) }
+                else -> LazyVerticalGrid(
+                    columns = GridCells.Fixed(GRID_COLUMNS),
+                    state = gridState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = 32.dp, bottom = 40.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    itemsIndexed(vods, key = { _, v -> v.vod_id }) { index, vod ->
+                        PosterCard(
+                            vod = vod,
+                            width = 176.dp,
+                            height = 250.dp,
+                            onClick = { onVodClick(vod) },
+                            keyHandler = { event ->
+                                // 网格边界键处理：最左列 LEFT / 首行 UP 跳回分类列表
+                                if (event.type != KeyEventType.KeyDown) return@PosterCard false
+                                val col = index % GRID_COLUMNS
+                                val row = index / GRID_COLUMNS
+                                when (event.key) {
+                                    Key.DirectionLeft -> {
+                                        if (col == 0) {
+                                            focusCategory()
+                                            true
+                                        } else false
+                                    }
+                                    Key.DirectionUp -> {
+                                        if (row == 0) {
+                                            focusCategory()
+                                            true
+                                        } else false
+                                    }
+                                    else -> false
+                                }
+                            }
+                        )
+                    }
+                    if (loadingMore) {
+                        // 触底加载更多时在网格尾部显示加载圈
+                        item(key = "loading_more", span = { GridItemSpan(maxLineSpan) }) {
+                            Box(
+                                Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = NetflixRed,
+                                    modifier = Modifier.size(28.dp)
                                 )
                             }
                         }
@@ -115,7 +232,13 @@ fun BrowseScreen(
 }
 
 @Composable
-private fun TypeItem(name: String, selected: Boolean, onClick: () -> Unit) {
+private fun TypeItem(
+    name: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    focusRequester: FocusRequester,
+    onFocused: () -> Unit
+) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (focused) 1.04f else 1.0f,
@@ -140,7 +263,11 @@ private fun TypeItem(name: String, selected: Boolean, onClick: () -> Unit) {
                 }
             )
             .border(2.dp, borderColor, RoundedCornerShape(8.dp))
-            .onFocusChanged { focused = it.isFocused }
+            .focusRequester(focusRequester)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocused()
+            }
             .clickable(onClick = onClick)
     ) {
         Text(

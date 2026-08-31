@@ -9,18 +9,26 @@ class VodRepository(context: Context) {
 
     private val client = ApiClient(context.applicationContext)
 
-    /** 首页：只取第一页 + 按分类取样，避免 15 万条数据全量拉取 */
+    /** 首页：只取第一页 + 按热度排序（服务端 by=hits；未支持时客户端按 vod_hits 降序兜底） */
     suspend fun getHomeList(): Result<List<Vod>> = withContext(Dispatchers.IO) {
         runCatching {
-            client.decodeList(client.api.getVodListLight()).list
+            val list = client.decodeList(client.api.getVodListLight(by = "hits")).list
+            sortByHits(list)
         }
     }
 
-    /** 按分类拉取（分页，用于首页分类行/浏览页） */
-    suspend fun getListByType(typeId: Int, page: Int = 1): Result<List<Vod>> = withContext(Dispatchers.IO) {
+    /** 按分类拉取（分页，用于首页分类行）；按热度排序 */
+    suspend fun getListByType(typeId: Int, page: Int = 1): Result<List<Vod>> =
+        getListByTypePage(typeId, page).map { it.list }
+
+    /**
+     * 按分类拉取分页，返回原始响应（含 pagecount，浏览页无限滚动用）。
+     * 服务端未按热度排序时客户端按 vod_hits 降序兜底。
+     */
+    suspend fun getListByTypePage(typeId: Int, page: Int): Result<ApiResponse> = withContext(Dispatchers.IO) {
         runCatching {
-            val raw = client.api.getVodList(t = typeId.toString(), pg = page)
-            client.decodeList(raw).list
+            val raw = client.api.getVodList(t = typeId.toString(), pg = page, by = "hits")
+            client.decodeList(raw).let { it.copy(list = sortByHits(it.list)) }
         }
     }
 
@@ -49,4 +57,8 @@ class VodRepository(context: Context) {
                 ?: throw IllegalStateException("detail empty")
         }
     }
+
+    /** 客户端兜底排序：服务端未按热度排序时按 vod_hits 降序 */
+    private fun sortByHits(list: List<Vod>): List<Vod> =
+        list.sortedByDescending { it.vod_hits }
 }
