@@ -7,6 +7,7 @@
  *   php collect_ffzy.php [start_year] [end_year]            # 全量
  *   php collect_ffzy.php 2026 2026                          # 只采2026
  *   php collect_ffzy.php 2020 2026 t=13,t=2                 # 指定分类
+ *   php collect_ffzy.php --no-year                          # 无年份片源补齐(按t逐页)
  *   php collect_ffzy.php --dry 2020 2020 t=13               # 只打印不写库
  */
 
@@ -46,8 +47,10 @@ $TYPE_FALLBACK = [
 
 // ---- 参数 ----
 $dry = false;
+$noYear = false;
 $argv = array_slice($argv, 1);
 if (in_array('--dry', $argv)) { $dry = true; $argv = array_diff($argv, ['--dry']); }
+if (in_array('--no-year', $argv)) { $noYear = true; $argv = array_diff($argv, ['--no-year']); }
 $argv = array_values(array_filter($argv));
 
 $startYear = 2006; $endYear = 2026; $onlyTypes = null;
@@ -62,9 +65,9 @@ foreach ($argv as $a) {
     }
 }
 $startYear = max(2000, min($startYear, 2026));
-$endYear   = min(2026, max($endYear, $startYear));
+$endYear   = $noYear ? 2026 : min(2026, max($endYear, $startYear));
 
-echo date('Y-m-d H:i:s') . " start years={$startYear}-{$endYear} dry=" . ($dry ? '1' : '0') . PHP_EOL;
+echo date('Y-m-d H:i:s') . " start years={$startYear}-{$endYear} noYear=" . ($noYear ? '1' : '0') . " dry=" . ($dry ? '1' : '0') . PHP_EOL;
 
 // ---- DB ----
 $mysqli = @new mysqli($DB['host'], $DB['user'], $DB['pass'], $DB['name']);
@@ -172,11 +175,11 @@ foreach ($srcTypes as $srcT) {
     if (!$local) { echo "[t=$srcT] no local mapping, skip\n"; continue; }
     $localPid = isset($typePid[$local]) ? $typePid[$local] : 0;
 
-    foreach (range($startYear, $endYear) as $year) {
+    foreach ($noYear ? [null] : range($startYear, $endYear) as $year) {
         $pg = 1; $pageCount = 0; $items = 0; $new = 0; $upd = 0; $skip = 0;
         $t0 = microtime(true);
         while (true) {
-            $url = $SRC_URL . '?ac=videolist&t=' . $srcT . '&year=' . $year . '&pg=' . $pg;
+            $url = $SRC_URL . '?ac=videolist&t=' . $srcT . ($year === null ? '' : '&year=' . $year) . '&pg=' . $pg;
             $json = fetch_json($url);
             if (!$json) { echo "[t=$srcT y=$year] fetch fail at pg=$pg, abort block\n"; break; }
             if ($pageCount === 0) {
@@ -188,6 +191,9 @@ foreach ($srcTypes as $srcT) {
                 $name = trim(isset($item['vod_name']) ? $item['vod_name'] : '');
                 $playUrl = fmt_play_url($item);
                 if ($name === '' || $playUrl === '') { $skip++; continue; }
+
+                // 无年份补齐模式：跳过带年份条目（由按年扫描负责），否则会覆盖其年份归属
+                if ($noYear && !empty($item['vod_year']) && (int)$item['vod_year'] !== 0) { $skip++; continue; }
 
                 if ($dry) continue;
 
@@ -248,6 +254,8 @@ foreach ($srcTypes as $srcT) {
                 ];
 
                 if ($exists) {
+                    // 无年份补齐：仅入库全新条目，不覆盖已存在记录的年份（按年扫描负责更新）
+                    if ($noYear) { $skip++; continue; }
                     $set = []; $params = []; $types = '';
                     foreach ($cols as $k => $val) { $set[] = "$k = ?"; $params[] = $val; $types .= 's'; }
                     $params[] = $exists; $types .= 'i';
@@ -277,8 +285,8 @@ foreach ($srcTypes as $srcT) {
             sleep($SLEEP);
         }
         $elapsed = round(microtime(true) - $t0, 1);
-        echo sprintf("[t=%d y=%d] pages=%d items=%d new=%d upd=%d skip=%d %.1fs\n",
-            $srcT, $year, $pageCount, $items, $new, $upd, $skip, $elapsed);
+        echo sprintf("[t=%d y=%s] pages=%d items=%d new=%d upd=%d skip=%d %.1fs\n",
+            $srcT, $year === null ? 'none' : $year, $pageCount, $items, $new, $upd, $skip, $elapsed);
         $totalNew += $new; $totalUpd += $upd; $totalSkip += $skip;
     }
 }
