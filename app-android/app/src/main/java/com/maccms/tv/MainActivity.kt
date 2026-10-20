@@ -18,7 +18,10 @@ import com.maccms.tv.data.Episode
 import com.maccms.tv.data.Vod
 import com.maccms.tv.data.VodRepository
 import com.maccms.tv.ui.browse.BrowseScreen
+import com.maccms.tv.ui.browse.BrowseState
 import com.maccms.tv.ui.detail.DetailScreen
+import com.maccms.tv.ui.favorites.FavoritesScreen
+import com.maccms.tv.ui.history.HistoryScreen
 import com.maccms.tv.ui.home.HomeScreen
 import com.maccms.tv.ui.player.PlayerScreen
 import com.maccms.tv.ui.search.SearchScreen
@@ -42,6 +45,8 @@ fun TvApp() {
     val context = LocalContext.current
     val repository = remember { VodRepository(context) }
     val navController = rememberNavController()
+    // 浏览页状态提升到 NavHost 外层：去详情再返回时，分类选择/列表/滚动位置都保留
+    val browseState = remember { BrowseState() }
 
     NavHost(
         navController = navController,
@@ -57,6 +62,7 @@ fun TvApp() {
                 },
                 onPlayClick = { vod ->
                     cacheVod(vod)
+                    clearCachedEpisode(vod.vod_id)
                     navController.navigate("player/${vod.vod_id}")
                 },
                 onNavigate = { route -> navigateToTop(navController, route) }
@@ -68,13 +74,32 @@ fun TvApp() {
                 onVodClick = { vod ->
                     cacheVod(vod)
                     navController.navigate("detail/${vod.vod_id}")
-                }
+                },
+                state = browseState
             )
         }
         composable("search") {
             SearchScreen(
                 repository = repository,
                 onVodClick = { vod ->
+                    cacheVod(vod)
+                    navController.navigate("detail/${vod.vod_id}")
+                }
+            )
+        }
+        composable("history") {
+            HistoryScreen(
+                // 历史行 OK 直接续播：不清空点选缓存，播放页按观看记录回到上次位置
+                onPlay = { vod ->
+                    cacheVod(vod)
+                    clearCachedEpisode(vod.vod_id)
+                    navController.navigate("player/${vod.vod_id}")
+                }
+            )
+        }
+        composable("favorites") {
+            FavoritesScreen(
+                onOpenDetail = { vod ->
                     cacheVod(vod)
                     navController.navigate("detail/${vod.vod_id}")
                 }
@@ -89,6 +114,12 @@ fun TvApp() {
                 vodId = vodId,
                 repository = repository,
                 onBack = { navController.popBackStack() },
+                // 默认播放按钮：不指定集数，由播放页按观看记录续播
+                onPlay = { vod ->
+                    cacheVod(vod)
+                    clearCachedEpisode(vod.vod_id)
+                    navController.navigate("player/${vod.vod_id}")
+                },
                 onPlayEpisode = { vod, ep ->
                     cacheVod(vod)
                     cacheEpisode(vod.vod_id, ep)
@@ -117,6 +148,11 @@ private fun cacheVod(vod: Vod) {
 
 private fun cacheEpisode(vodId: Int, ep: Episode) {
     savedEpisodeCache[vodId] = ep
+}
+
+/** 从「播放/继续观看」入口进入时清掉上次点选的集，让播放页回落到续播逻辑 */
+private fun clearCachedEpisode(vodId: Int) {
+    savedEpisodeCache.remove(vodId)
 }
 
 private fun cachedEpisode(vodId: Int): Episode? = savedEpisodeCache[vodId]

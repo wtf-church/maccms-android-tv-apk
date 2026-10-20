@@ -10,6 +10,7 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,7 +22,9 @@ import com.maccms.tv.ui.theme.TextWhite
 fun PosterRow(
     title: String,
     vods: List<Vod>,
-    onVodClick: (Vod) -> Unit
+    onVodClick: (Vod) -> Unit,
+    // 可选：把焦点交给第一张海报（搜索完成后聚焦结果用）
+    focusRequester: FocusRequester? = null
 ) {
     Spacer(Modifier.height(12.dp))
     Text(
@@ -35,8 +38,12 @@ fun PosterRow(
         contentPadding = PaddingValues(horizontal = 40.dp),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
     ) {
-        itemsIndexed(vods, key = { _, v -> v.vod_id + title.hashCode() }) { _, vod ->
-            PosterCard(vod = vod, onClick = { onVodClick(vod) })
+        itemsIndexed(vods, key = { _, v -> v.vod_id + title.hashCode() }) { index, vod ->
+            PosterCard(
+                vod = vod,
+                onClick = { onVodClick(vod) },
+                focusRequester = if (index == 0) focusRequester else null
+            )
         }
     }
 }

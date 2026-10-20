@@ -120,7 +120,14 @@ fun HomeScreen(
 /** 顶部导航：Netflix 风格 —— 左侧 LOGO + 横向菜单 */
 @Composable
 fun TopNavBar(onNavigate: (String) -> Unit, selected: String) {
-    val items = listOf("home" to "首页", "browse" to "浏览", "search" to "搜索", "settings" to "设置")
+    val items = listOf(
+        "home" to "首页",
+        "browse" to "浏览",
+        "search" to "搜索",
+        "history" to "观看历史",
+        "favorites" to "我的收藏",
+        "settings" to "设置"
+    )
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier

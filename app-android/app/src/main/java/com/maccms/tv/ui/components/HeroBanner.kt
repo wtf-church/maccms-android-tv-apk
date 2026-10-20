@@ -27,6 +27,7 @@ import coil.compose.AsyncImage
 import com.maccms.tv.data.Vod
 import com.maccms.tv.ui.theme.NetflixRed
 import com.maccms.tv.ui.theme.TextWhite
+import com.maccms.tv.util.RichTextParser
 
 /** Netflix 风格 Hero 横幅：大图 + 渐变遮罩 + 标题 + 操作按钮 */
 @Composable
@@ -114,7 +115,7 @@ fun HeroBanner(
             Spacer(Modifier.height(10.dp))
             if (vod.vod_content.isNotBlank()) {
                 Text(
-                    text = vod.vod_content,
+                    text = RichTextParser.toPlainText(vod.vod_content),
                     color = TextWhite.copy(alpha = 0.85f),
                     fontSize = 14.sp,
                     maxLines = 2,

@@ -8,8 +8,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -47,11 +49,28 @@ import kotlinx.coroutines.launch
 
 private const val GRID_COLUMNS = 5
 
+/**
+ * 浏览页状态：提升到 NavHost 外层(remember)持有，导航到详情再返回时
+ * 分类选择、已加载列表、网格滚动位置全部保留。
+ */
+class BrowseState {
+    var selectedType by mutableIntStateOf(5)
+    var vods by mutableStateOf<List<Vod>>(emptyList())
+    var loadedType by mutableIntStateOf(0)
+    var maxPage by mutableIntStateOf(1)
+    var nextPage by mutableIntStateOf(1)
+    var loading by mutableStateOf(false)
+    var error by mutableStateOf<String?>(null)
+    var gridState = LazyGridState()
+    var typeListState = LazyListState()
+}
+
 /** 浏览页：左侧分类列表 + 右侧该类影片网格（遥控器方向键跨区域导航） */
 @Composable
 fun BrowseScreen(
     repository: VodRepository,
-    onVodClick: (Vod) -> Unit
+    onVodClick: (Vod) -> Unit,
+    state: BrowseState = remember { BrowseState() }
 ) {
     val allTypeNames = listOf(
         5 to "短剧", 6 to "纪录片",
@@ -63,61 +82,77 @@ fun BrowseScreen(
         43 to "欧美综艺", 44 to "电影解说", 45 to "预告片"
     )
     var typeNames by remember { mutableStateOf(allTypeNames) }
-    var selectedType by remember { mutableStateOf(5) }
-    var vods by remember { mutableStateOf<List<Vod>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var maxPage by remember { mutableIntStateOf(1) }
-    var nextPage by remember { mutableIntStateOf(1) }
     var loadingMore by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val gridState = rememberLazyGridState()
-
-    // 首次加载：探测各分类是否有数据，只保留有数据的分类
-    LaunchedEffect(Unit) {
-        val existing = mutableListOf<Pair<Int, String>>()
-        allTypeNames.forEach { (id, name) ->
-            repository.getListByType(id).onSuccess { typeList ->
-                if (typeList.isNotEmpty()) existing += (id to name)
-            }
-        }
-        typeNames = if (existing.isEmpty()) allTypeNames else existing
-    }
 
     fun load(id: Int) {
         scope.launch {
-            loading = true
-            error = null
+            state.loading = true
+            state.error = null
             loadingMore = false
-            maxPage = 1
-            nextPage = 1
+            state.maxPage = 1
+            state.nextPage = 1
             repository.getListByTypePage(id, 1).onSuccess { resp ->
-                if (selectedType == id) {
-                    vods = resp.list
-                    maxPage = resp.pagecount.coerceAtLeast(1)
+                if (state.selectedType == id) {
+                    state.vods = resp.list
+                    state.maxPage = resp.pagecount.coerceAtLeast(1)
+                    state.loadedType = id
                 }
-                loading = false
+                state.loading = false
             }.onFailure {
-                error = it.message
-                loading = false
+                if (state.selectedType == id) {
+                    // 标记已尝试：避免 effect 自动重试死循环，由用户点重试
+                    state.error = it.message
+                    state.loadedType = id
+                }
+                state.loading = false
             }
+        }
+    }
+
+    // 首次进入浏览页才探测分类；有保存状态时跳过（避免重复探测覆盖用户选择）
+    var probed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!probed) {
+            probed = true
+            if (state.vods.isEmpty()) {
+                val existing = mutableListOf<Pair<Int, String>>()
+                allTypeNames.forEach { (id, name) ->
+                    repository.getListByType(id).onSuccess { typeList ->
+                        if (typeList.isNotEmpty()) existing += (id to name)
+                    }
+                }
+                typeNames = if (existing.isEmpty()) allTypeNames else existing
+            }
+        }
+    }
+
+    // 分类变化时加载第一页；返回浏览页时缓存列表已就绪则不重复请求。
+    // loading 也作为 key：加载中切换分类时跳过本次，请求结束后再触发。
+    // 防自动重试死循环：load 成功/失败都会更新 loadedType，使条件不再成立。
+    LaunchedEffect(state.selectedType, state.loadedType, state.loading) {
+        if (state.selectedType != state.loadedType && !state.loading) {
+            state.vods = emptyList()
+            state.error = null
+            state.gridState.scrollToItem(0)
+            load(state.selectedType)
         }
     }
 
     // 触底加载下一页：读最后一项时预取下一页（pagecount 上限内）
-    LaunchedEffect(gridState, nextPage, maxPage, selectedType, vods.size) {
-        if (!loading && !loadingMore && nextPage < maxPage && vods.isNotEmpty()) {
-            val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()
-            val target = (vods.size - 1).coerceAtLeast(0)
+    LaunchedEffect(state.gridState, state.nextPage, state.maxPage, state.selectedType, state.vods.size) {
+        if (!state.loading && !loadingMore && state.nextPage < state.maxPage && state.vods.isNotEmpty()) {
+            val last = state.gridState.layoutInfo.visibleItemsInfo.lastOrNull()
+            val target = (state.vods.size - 1).coerceAtLeast(0)
             if (last != null && last.index >= target - GRID_COLUMNS) {
                 loadingMore = true
-                val page = nextPage
-                val type = selectedType
+                val page = state.nextPage
+                val type = state.selectedType
                 repository.getListByTypePage(type, page).onSuccess { resp ->
-                    if (selectedType == type) {
-                        vods = (vods + resp.list).distinctBy { it.vod_id }
-                        maxPage = resp.pagecount.coerceAtLeast(maxPage)
-                        nextPage = page + 1
+                    if (state.selectedType == type) {
+                        state.vods = (state.vods + resp.list).distinctBy { it.vod_id }
+                        state.maxPage = resp.pagecount.coerceAtLeast(state.maxPage)
+                        state.nextPage = page + 1
                     }
                 }
                 loadingMore = false
@@ -125,11 +160,8 @@ fun BrowseScreen(
         }
     }
 
-    LaunchedEffect(selectedType) { load(selectedType) }
-
     // —— 遥控器焦点管理 ——
-    val typeListState = rememberLazyListState()
-    val focusedTypeId = remember { mutableIntStateOf(selectedType) }
+    val focusedTypeId = remember { mutableIntStateOf(state.selectedType) }
     val typeRequesters = remember { mutableStateMapOf<Int, FocusRequester>() }
 
     // 进入浏览页时先聚焦当前分类，保证遥控器立即可用
@@ -141,7 +173,7 @@ fun BrowseScreen(
     // 网格边界键（最左列 LEFT / 首行 UP）跳回分类列表
     fun focusCategory() {
         scope.launch {
-            typeListState.animateScrollToItem(
+            state.typeListState.animateScrollToItem(
                 typeNames.indexOfFirst { it.first == focusedTypeId.intValue }.coerceAtLeast(0)
             )
             delay(60)
@@ -151,15 +183,15 @@ fun BrowseScreen(
 
     Row(Modifier.fillMaxSize().background(NetflixBlack)) {
         LazyColumn(
-            state = typeListState,
+            state = state.typeListState,
             modifier = Modifier.width(220.dp).fillMaxHeight(),
             contentPadding = PaddingValues(vertical = 20.dp)
         ) {
             items(typeNames, key = { it.first }) { (id, name) ->
                 TypeItem(
                     name = name,
-                    selected = id == selectedType,
-                    onClick = { selectedType = id },
+                    selected = id == state.selectedType,
+                    onClick = { state.selectedType = id },
                     focusRequester = remember(id) { FocusRequester().also { typeRequesters[id] = it } },
                     onFocused = { focusedTypeId.intValue = id }
                 )
@@ -172,17 +204,17 @@ fun BrowseScreen(
                 .padding(end = 40.dp)
         ) {
             when {
-                loading -> LoadingBox()
-                error != null -> ErrorBox(error ?: "", onRetry = { load(selectedType) })
+                state.loading -> LoadingBox()
+                state.error != null -> ErrorBox(state.error ?: "", onRetry = { load(state.selectedType) })
                 else -> LazyVerticalGrid(
                     columns = GridCells.Fixed(GRID_COLUMNS),
-                    state = gridState,
+                    state = state.gridState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(top = 32.dp, bottom = 40.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    itemsIndexed(vods, key = { _, v -> v.vod_id }) { index, vod ->
+                    itemsIndexed(state.vods, key = { _, v -> v.vod_id }) { index, vod ->
                         PosterCard(
                             vod = vod,
                             width = 176.dp,

@@ -15,22 +15,24 @@ import android.content.Context
 /** maccms 标准 API（api.php/provide/vod） */
 interface MaccmsApi {
 
-    /** 列表：ac=videolist 返回全部字段（含 vod_pic/vod_play_url）；pg=页码；t=分类 id；wd=搜索关键词 */
+    /** 列表：ac=videolist 返回全部字段（含 vod_pic/vod_play_url）；pg=页码；t=分类 id；wd=搜索关键词；by=排序（hits/score/time） */
     @GET("api.php/provide/vod")
     suspend fun getVodList(
         @Query("ac") ac: String = "videolist",
         @Query("pg") pg: Int = 1,
         @Query("t") t: String? = null,
-        @Query("wd") wd: String? = null
+        @Query("wd") wd: String? = null,
+        @Query("by") by: String? = null
     ): String
 
-    /** 轻量列表：ac=list（不含 vod_pic 等字段，字段更少、更快） */
+    /** 轻量列表：ac=list（不含 vod_pic 等字段，字段更少、更快）；by=排序 */
     @GET("api.php/provide/vod")
     suspend fun getVodListLight(
         @Query("ac") ac: String = "list",
         @Query("pg") pg: Int = 1,
         @Query("t") t: String? = null,
-        @Query("wd") wd: String? = null
+        @Query("wd") wd: String? = null,
+        @Query("by") by: String? = null
     ): String
 
     /** 详情：ac=detail&ids=vod_id */
