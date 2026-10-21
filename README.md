@@ -388,4 +388,4 @@ Dockerfile 已配置 `Acquire::Retries "10"` 与重试循环；重跑 `docker co
 
 - Gitee（主仓库）：https://gitee.com/shuizhuyu/maccms_tv_client
 - GitHub（镜像）：https://github.com/wtf-church/maccms-android-tv-apk
-- `origin` 已配置多个 push URL：执行 `git push origin --all --tags` 即可同时发布到 Gitee 与 GitHub。
+- `origin` 已配置多个 push URL：执行 `git push origin --all`（有 tag 时再补 `git push origin --tags`）即可同时发布到 Gitee 与 GitHub。
