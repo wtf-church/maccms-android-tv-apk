@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -14,22 +16,47 @@ android {
         minSdk = 23
         targetSdk = 30
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86")
         }
     }
 
+    // 发布签名：读取 app-android/keystore.properties（不入库），缺失时退化为未签名 release 构建
+    val keystorePropsFile = rootProject.file("keystore.properties")
+    val keystoreProps = Properties().apply {
+        if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
+    }
+    val hasReleaseKey = keystorePropsFile.exists()
+
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
+    // AGP 8.11 lint 在当前 lifecycle 依赖上会触发 detector 崩溃（IncompatibleClassChangeError），
+    // release 构建跳过 lintVital
+    lint {
+        checkReleaseBuilds = false
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (hasReleaseKey) signingConfig = signingConfigs.getByName("release")
         }
     }
 
     // 写入最小占位 .so 使 APK 的 native-code 显式包含 armeabi-v7a/arm64-v8a（真机 32 位兼容）
-    val abiDir = layout.buildDirectory.dir("generated/jniLibs/debug")
-    tasks.matching { it.name == "preDebugBuild" }.configureEach {
+    val abiDir = layout.buildDirectory.dir("generated/jniLibs/main")
+    tasks.matching { it.name == "preDebugBuild" || it.name == "preReleaseBuild" }.configureEach {
         doLast {
             listOf("armeabi-v7a" to "libplaceholder.so", "arm64-v8a" to "libplaceholder.so", "x86" to "libplaceholder.so").forEach { (abi, name) ->
                 val out = abiDir.get().file("$abi/$name").asFile
@@ -41,7 +68,7 @@ android {
 
     sourceSets {
         getByName("main") {
-            jniLibs.srcDir(layout.buildDirectory.dir("generated/jniLibs/debug"))
+            jniLibs.srcDir(layout.buildDirectory.dir("generated/jniLibs/main"))
         }
     }
 

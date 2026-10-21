@@ -23,6 +23,11 @@ app-android/.cxx/
 
 # ── 交付二进制（经 Releases / README 构建说明分发） ────────────
 docs/*.apk
+dist/
+
+# ── 发布签名密钥（本地保管，不入库） ───────────────────────────
+app-android/keystore/
+app-android/keystore.properties
 
 # ── 第三方源码：maccms V10（Apache-2.0，构建前从上游获取） ─────
 docker/maccms/src/
