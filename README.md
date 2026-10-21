@@ -8,8 +8,24 @@
 
 ---
 
+## 下载
+
+首个正式版 **v1.0.0**（Android 6.0+，含 armeabi-v7a / arm64-v8a / x86）：
+
+| 渠道 | 安装包 |
+|---|---|
+| Gitee（国内推荐） | [MaccmsTV-v1.0.0-universal.apk](https://gitee.com/shuizhuyu/maccms_tv_client/releases/download/v1.0.0/MaccmsTV-v1.0.0-universal.apk) |
+| GitHub | [MaccmsTV-v1.0.0-universal.apk](https://github.com/wtf-church/maccms-android-tv-apk/releases/download/v1.0.0/MaccmsTV-v1.0.0-universal.apk) |
+
+历史版本与更新说明：[Gitee Releases](https://gitee.com/shuizhuyu/maccms_tv_client/releases) / [GitHub Releases](https://github.com/wtf-church/maccms-android-tv-apk/releases)。
+
+SHA-256：`e86c191a597983d6ee4bf3677b667d1a1d74098c234d4bd7c3161c1513315fc2`
+
+---
+
 ## 目录
 
+- [下载](#下载)
 - [功能特性](#功能特性)
 - [项目架构](#项目架构)
 - [环境要求](#环境要求)
