@@ -19,6 +19,7 @@
 - [配置说明](#配置说明)
 - [端到端测试](#端到端测试)
 - [常见问题](#常见问题)
+- [免责声明](#免责声明)
 - [许可证](#许可证)
 - [参考](#参考)
 
@@ -354,14 +355,22 @@ Dockerfile 已配置 `Acquire::Retries "10"` 与重试循环；重跑 `docker co
 
 ---
 
+## 免责声明
+
+- 本项目**仅限学习交流**，禁止用于未授权影视资源聚合。
+- 下游打包售卖、接入盗版源等行为与作者无关。
+- 本仓库不提供、不分发任何影视资源；演示数据均为本地生成的测试素材。使用者应确保自行配置的数据源合法合规，并自行承担相应责任。
+
+---
+
 ## 许可证
 
-本项目整体为演示/自用工程。各部分许可如下：
+本项目源码采用 [MIT License](LICENSE)。各部分许可如下：
 
 | 组件 | 许可证 |
 |---|---|
-| maccms V10（源码仅用于本地演示，不在本仓库分发） | [Apache-2.0](https://github.com/magicblack/maccms10) |
-| 本项目源码（docker/ + app-android/，排除第三方组件） | [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| 本项目源码（docker/ + app-android/，排除第三方组件与 `docker/maccms/src/`） | [MIT](LICENSE) |
+| maccms V10（源码仅用于本地演示，不在本仓库分发，`docker/maccms/src/` 已被 `.gitignore` 排除） | [Apache-2.0](https://github.com/magicblack/maccms10) |
 | Android / Kotlin / Compose / Media3 / Retrofit 等依赖 | 各项目自身的开源许可证 |
 
 > 演示数据仅为本地开发用途；请勿将 maccms 源码用于对外发布等未经授权的场景。
@@ -374,3 +383,9 @@ Dockerfile 已配置 `Acquire::Retries "10"` 与重试循环；重跑 `docker co
 - Jetpack Compose for TV：https://developer.android.com/jetpack/androidx/releases/tv
 - Media3 ExoPlayer：https://developer.android.com/media/media3
 - 本项目 goal.md（开发任务书）：`GOAL.md`
+
+### 仓库与发布
+
+- Gitee（主仓库）：https://gitee.com/shuizhuyu/maccms_tv_client
+- GitHub（镜像）：https://github.com/wtf-church/maccms-android-tv-apk
+- `origin` 已配置多个 push URL：执行 `git push origin --all --tags` 即可同时发布到 Gitee 与 GitHub。
