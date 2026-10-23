@@ -43,9 +43,10 @@ SHA-256：`e86c191a597983d6ee4bf3677b667d1a1d74098c234d4bd7c3161c1513315fc2`
 
 ## 功能特性
 
-- **Netflix 风格 UI**：顶部导航（首页/浏览/搜索/设置）+ Hero 大横幅 + 横向海报行 + 遥控焦点缩放（1.0 → 1.1 白色描边）
+- **Netflix 风格 UI**：顶部导航（首页/直播/浏览/搜索/观看历史/我的收藏/设置）+ Hero 大横幅 + 横向海报行 + 遥控焦点缩放（1.0 → 1.1 白色描边）
 - **数据源**：自建 maccms V10（ThinkPHP 5）标准 API `api.php/provide/vod`，支持分类浏览、关键词搜索、影片详情
 - **播放**：Media3 ExoPlayer，兼容 MP4 / HLS(m3u8)；演示用本地 MP4 流
+- **直播**：M3U 直播源（默认内置 best-fan/iptv-sources 的 cn_all_status 源，经 gh.bravetimes.cn 加速；地址在 `assets/live_config.properties` 配置），按源内分组（央视/卫视/其他/卡通/体育等），同名多线路失败自动回退；节目源落盘缓存（12h TTL + ETag），遥控器 OK 呼出频道列表、上下键直接换台
 - **真机兼容**：APK 显式包含 `armeabi-v7a` + `arm64-v8a`（32 位真机可装），同时含 `x86` 供模拟器
 - **运行时配置**：设置页可修改 API 服务器地址（真机切换宿主机局域网 IP）
 - **全离线演示数据**：36 部影片（6 分类）、4 段 ffmpeg 生成的测试 MP4、12 张海报/横幅图
@@ -293,6 +294,17 @@ docker exec android-tv-emulator bash -c "adb -s emulator-5554 shell input keyeve
 
 默认 `http://10.0.2.2:8080`（模拟器内指向 maccms）。设置页修改后写入 `SharedPreferences`，立即生效。真机场景改为宿主机局域网 IP。
 
+### 直播源（M3U，运行时）
+
+默认使用内置测试源（best-fan/iptv-sources 的 cn_all_status，经 gh.bravetimes.cn 加速）。地址配置在 `app-android/app/src/main/assets/live_config.properties` 的 `playlistUrl`，修改后重新构建 APK 生效；设置页「直播节目源（M3U）」可运行时覆盖、恢复默认或手动刷新。
+
+- 源内同名频道会合并多条线路，播放失败自动切换；线路失效时可在设置中刷新或换成其他 M3U 源。
+- 支持直接粘贴 GitHub 网页（blob）地址，客户端会自动转换为 raw 地址再下载。
+- 节目源首次下载后缓存到应用私有目录 `files/live/playlist.m3u`，有效期 12 小时；过期后进入直播页先用缓存秒开，再后台用 ETag 条件请求更新。
+- 同一频道有多条线路时，播放失败会自动切换下一条；全部失败会在频道列表显示提示。
+- 修改地址后保存会清空旧缓存，下次进入直播页重新下载；下载失败时继续使用旧缓存。
+- 直播页操作：OK 呼出频道列表 / 列表内 OK 切台；列表收起时上下键直接换台；左右键切分组；返回先关列表再退出；列表内菜单键刷新节目源。
+
 ### maccms 演示数据
 
 | 数据 | 来源 |
@@ -387,6 +399,7 @@ Dockerfile 已配置 `Acquire::Retries "10"` 与重试循环；重跑 `docker co
 |---|---|
 | 本项目源码（docker/ + app-android/，排除第三方组件与 `docker/maccms/src/`） | [MIT](LICENSE) |
 | maccms V10（源码仅用于本地演示，不在本仓库分发，`docker/maccms/src/` 已被 `.gitignore` 排除） | [Apache-2.0](https://github.com/magicblack/maccms10) |
+| lemonTV（M3U 解析/分组逻辑，已适配） | [MIT](THIRD_PARTY_NOTICES.md) |
 | Android / Kotlin / Compose / Media3 / Retrofit 等依赖 | 各项目自身的开源许可证 |
 
 > 演示数据仅为本地开发用途；请勿将 maccms 源码用于对外发布等未经授权的场景。
@@ -396,6 +409,7 @@ Dockerfile 已配置 `Acquire::Retries "10"` 与重试循环；重跑 `docker co
 ## 参考
 
 - maccms10 官方仓库：https://github.com/magicblack/maccms10
+- lemonTV（M3U 解析逻辑参考）：https://github.com/jia070310/lemontv
 - Jetpack Compose for TV：https://developer.android.com/jetpack/androidx/releases/tv
 - Media3 ExoPlayer：https://developer.android.com/media/media3
 - 本项目 goal.md（开发任务书）：`GOAL.md`

@@ -1,5 +1,6 @@
 package com.maccms.tv.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Text
@@ -42,7 +43,7 @@ fun ErrorBox(
                     color = NetflixRed,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(8.dp)
+                    modifier = Modifier.padding(8.dp).clickable(onClick = onRetry)
                 )
             }
         }

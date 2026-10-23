@@ -83,14 +83,14 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) { load() }
 
-    Box(Modifier.fillMaxSize().background(NetflixBlack)) {
-        when {
-            loading -> LoadingBox()
-            error != null -> ErrorBox(error ?: "", onRetry = { load() })
-            else -> Column(Modifier.fillMaxSize()) {
-                TopNavBar(onNavigate = onNavigate, selected = "home")
-                if (allVods.isNotEmpty()) {
-                    LazyColumn(modifier = Modifier.weight(1f)) {
+    Column(Modifier.fillMaxSize().background(NetflixBlack)) {
+        TopNavBar(onNavigate = onNavigate, selected = "home")
+        Box(Modifier.weight(1f)) {
+            when {
+                loading -> LoadingBox()
+                error != null -> ErrorBox(error ?: "", onRetry = { load() })
+                else -> if (allVods.isNotEmpty()) {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
                         item {
                             HeroBanner(
                                 vod = allVods.first(),
@@ -122,6 +122,7 @@ fun HomeScreen(
 fun TopNavBar(onNavigate: (String) -> Unit, selected: String) {
     val items = listOf(
         "home" to "首页",
+        "live" to "直播",
         "browse" to "浏览",
         "search" to "搜索",
         "history" to "观看历史",

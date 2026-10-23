@@ -117,5 +117,6 @@ dependencies {
     implementation("androidx.media3:media3-ui-compose:1.11.0")
     implementation("androidx.media3:media3-ui-compose-material3:1.11.0")
 
+    testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

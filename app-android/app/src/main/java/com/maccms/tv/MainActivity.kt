@@ -15,6 +15,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.maccms.tv.data.Episode
+import com.maccms.tv.data.LiveRepository
 import com.maccms.tv.data.Vod
 import com.maccms.tv.data.VodRepository
 import com.maccms.tv.ui.browse.BrowseScreen
@@ -23,6 +24,7 @@ import com.maccms.tv.ui.detail.DetailScreen
 import com.maccms.tv.ui.favorites.FavoritesScreen
 import com.maccms.tv.ui.history.HistoryScreen
 import com.maccms.tv.ui.home.HomeScreen
+import com.maccms.tv.ui.live.LiveScreen
 import com.maccms.tv.ui.player.PlayerScreen
 import com.maccms.tv.ui.search.SearchScreen
 import com.maccms.tv.ui.settings.SettingsScreen
@@ -44,6 +46,7 @@ class MainActivity : ComponentActivity() {
 fun TvApp() {
     val context = LocalContext.current
     val repository = remember { VodRepository(context) }
+    val liveRepository = remember { LiveRepository(context) }
     val navController = rememberNavController()
     // 浏览页状态提升到 NavHost 外层：去详情再返回时，分类选择/列表/滚动位置都保留
     val browseState = remember { BrowseState() }
@@ -66,6 +69,12 @@ fun TvApp() {
                     navController.navigate("player/${vod.vod_id}")
                 },
                 onNavigate = { route -> navigateToTop(navController, route) }
+            )
+        }
+        composable("live") {
+            LiveScreen(
+                repository = liveRepository,
+                onBack = { navController.popBackStack() }
             )
         }
         composable("browse") {
@@ -106,7 +115,10 @@ fun TvApp() {
             )
         }
         composable("settings") {
-            SettingsScreen(onDone = { navigateToTop(navController, "home") })
+            SettingsScreen(
+                liveRepository = liveRepository,
+                onDone = { navigateToTop(navController, "home") }
+            )
         }
         composable("detail/{vodId}") { backStackEntry ->
             val vodId = backStackEntry.arguments?.getString("vodId")?.toIntOrNull() ?: 0
